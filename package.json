@@ -14,8 +14,51 @@
   "contributes": {
     "commands": [
       {
-        "command": "treemotions.helloWorld",
-        "title": "Hello World"
+        "command": "treemotions.toggleMode",
+        "title": "Toggle Mode"
+      },
+      {
+        "command": "treemotions.navigateLeft",
+        "title": "Navigate Left"
+      },
+      {
+        "command": "treemotions.navigateDown",
+        "title": "Navigate Down"
+      },
+      {
+        "command": "treemotions.navigateUp",
+        "title": "Navigate Up"
+      },
+      {
+        "command": "treemotions.navigateRight",
+        "title": "Navigate right"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "treemotions.toggleMode",
+        "key": "ctrl+alt+v",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "treemotions.navigateLeft",
+        "key": "h",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.navigateDown",
+        "key": "j",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.navigateUp",
+        "key": "k",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.navigateRight",
+        "key": "l",
+        "when": "editorTextFocus && vimMode == 'command'"
       }
     ]
   },
