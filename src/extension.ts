@@ -1,8 +1,13 @@
 import * as vscode from 'vscode';
+const Parser = require('tree-sitter');
+const Python = require('tree-sitter-python');
+
+const parser = new Parser();
+parser.setLanguage(Python);
 
 let vimMode: 'insert' | 'command' = 'insert';
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode)
 	);
@@ -27,6 +32,19 @@ function toggleMode() {
 	vimMode = vimMode === 'insert' ? 'command' : 'insert';
 	vscode.commands.executeCommand('setContext', 'vimMode', vimMode);
 	updateCursor();
+	parseActiveEditorContent();
+}
+
+async function parseActiveEditorContent() {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) return;
+
+	const document = editor.document;
+	const text = document.getText();
+	const tree = parser.parse(text);
+
+	// Now you can work with the parsed tree
+	console.log(tree.rootNode.toString());
 }
 
 function navigate(direction: 'left' | 'down' | 'up' | 'right') {
