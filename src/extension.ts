@@ -3,21 +3,31 @@ const Parser = require('tree-sitter');
 
 let vimMode: 'insert' | 'command' = 'insert';
 let parser: any;
+
 const PATTERN = {
 	Identifier: '(identifier) @identifier',
 	Block: '(block) @block',
 };
 
-async function initializeParser(language: string) {
+const COMMON_TREE_MOTIONS: { [key: string]: (startNode: any, offset: number) => any } = {
+	findNextIdentifier: (startNode, offset) => seek('next', PATTERN.Identifier, startNode, offset),
+	findPreviousIdentifier: (startNode, offset) => seek('previous', PATTERN.Identifier, startNode, offset),
+	findNextBlock: (startNode, offset) => seek('next', PATTERN.Block, startNode, offset),
+	findPreviousBlock: (startNode, offset) => seek('previous', PATTERN.Block, startNode, offset),
+};
+
+async function initializeParser(context: vscode.ExtensionContext, language: string) {
 	parser = new Parser();
 	switch (language) {
 		case 'python':
 			const Python = require('tree-sitter-python');
 			parser.setLanguage(Python);
+			registerMotions(context, COMMON_TREE_MOTIONS);
 			break;
 		case 'javascript':
 			const JavaScript = require('tree-sitter-javascript');
 			parser.setLanguage(JavaScript);
+			registerMotions(context, COMMON_TREE_MOTIONS);
 			break;
 		default:
 			// parser = null;
@@ -26,11 +36,20 @@ async function initializeParser(language: string) {
 	}
 }
 
+function registerMotions(context: vscode.ExtensionContext, motions: { [key: string]: (startNode: any, offset: number) => any }) {
+	for (const motion in motions) {
+		const name = `treemotions.${motion}`;
+		const action = () => submitTreeMotion(motions[motion]);
+		const command = vscode.commands.registerCommand(name, action);
+		context.subscriptions.push(command);
+	}
+}
+
 export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
-		vscode.workspace.onDidOpenTextDocument(handleFileOpen)
+		vscode.workspace.onDidOpenTextDocument((document) => handleFileOpen(context, document))
 	);
-	await initializeParserForActiveEditor();
+	await initializeParserForActiveEditor(context);
 	context.subscriptions.push(
 		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode)
 	);
@@ -50,36 +69,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('treemotions.goToDefinition', goToDefinition)
 	);
 	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.findNextIdentifier', () => moveCursorWithinTree('nextIdentifier'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.findPreviousIdentifier', () => moveCursorWithinTree('previousIdentifier'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.findNextBody', () => moveCursorWithinTree('nextBody'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.findPreviousBody', () => moveCursorWithinTree('previousBody'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveToNextSibling', () => moveCursorWithinTree('nextSibling'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveToPreviousSibling', () => moveCursorWithinTree('previousSibling'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveToParent', () => moveCursorWithinTree('parent'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveToChild', () => moveCursorWithinTree('firstNamedChild'))
+		vscode.commands.registerCommand('treemotions.moveToNextSibling', () => submitTreeMotion((startNode) => seekNextSibling(startNode)))
 	);
 
 	vscode.window.onDidChangeTextEditorSelection(updateCursor, null, context.subscriptions);
 }
 
-async function handleFileOpen(document: vscode.TextDocument) {
+async function handleFileOpen(context: vscode.ExtensionContext, document: vscode.TextDocument) {
 	const language = document.languageId;
-	await initializeParser(language);
+	await initializeParser(context, language);
 	parseActiveEditorContent();
 }
 
@@ -90,12 +88,12 @@ function toggleMode() {
 	parseActiveEditorContent();
 }
 
-async function initializeParserForActiveEditor() {
+async function initializeParserForActiveEditor(context: vscode.ExtensionContext) {
 	const editor = vscode.window.activeTextEditor;
 	if (editor) {
 		const document = editor.document;
 		const language = document.languageId;
-		await initializeParser(language);
+		await initializeParser(context, language);
 	}
 }
 
@@ -128,7 +126,7 @@ function navigate(direction: 'left' | 'down' | 'up' | 'right') {
 	editor.selections = positions.map(position => new vscode.Selection(position, position));
 }
 
-function moveCursorWithinTree(moveType: 'nextSibling' | 'previousSibling' | 'parent' | 'firstNamedChild' | 'nextIdentifier' | 'previousIdentifier' | 'nextBody' | 'previousBody') {
+function submitTreeMotion(targetFunc: (startNode: any, offset: number) => any) {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor || !parser) return;
 
@@ -138,22 +136,8 @@ function moveCursorWithinTree(moveType: 'nextSibling' | 'previousSibling' | 'par
 	const position = editor.selection.active;
 	const offset = document.offsetAt(position);
 
-	const node = tree.rootNode.namedDescendantForPosition({ row: position.line, column: position.character });
-	let targetNode = node[moveType];
-	if (moveType === 'parent') {
-		targetNode = seekNextParent(node);
-	} else if (moveType === 'nextSibling') {
-		targetNode = seekNextSibling(node);
-	} else if (moveType === 'nextIdentifier') {
-		targetNode = seek('next', PATTERN.Identifier, node, offset);
-	} else if (moveType === 'previousIdentifier') {
-		targetNode = seek('previous', PATTERN.Identifier, node, offset);
-	} else if (moveType === 'nextBody') {
-		targetNode = seek('next', PATTERN.Block, node, offset);
-	} else if (moveType === 'previousBody') {
-		targetNode = seek('previous', PATTERN.Block, node, offset);
-	}
-	vscode.window.showInformationMessage(`[${moveType}] Current node: \n${node}\nTarget node (): \n${targetNode}`);
+	const startNode = tree.rootNode.namedDescendantForPosition({ row: position.line, column: position.character });
+	let targetNode = targetFunc(startNode, offset);
 
 	if (targetNode) {
 		const newPosition = new vscode.Position(targetNode.startPosition.row, targetNode.startPosition.column);
@@ -171,7 +155,7 @@ function seekNextParent(node: any) {
 	return targetNode;
 }
 
-function seek(direction: 'next' | 'previous', pattern: typeof PATTERN[keyof typeof PATTERN], startNode: any, offset: number) {
+function seek(direction: 'next' | 'previous', pattern: string, startNode: any, offset: number) {
 	const query = new Parser.Query(parser.getLanguage(), pattern);
 	const captures = [...query.captures(startNode.tree.rootNode)];
 
@@ -191,7 +175,6 @@ function seek(direction: 'next' | 'previous', pattern: typeof PATTERN[keyof type
 
 
 function seekNextSibling(node: any) {
-	const startIndex = node.startIndex;
 	let targetNode = node;
 	while (targetNode.nextSibling === null) {
 		targetNode = targetNode.parent;

@@ -76,12 +76,12 @@
         "when": "editorTextFocus && vimMode == 'command'"
       },
       {
-        "command": "treemotions.findNextBody",
+        "command": "treemotions.findNextBlock",
         "key": "b",
         "when": "editorTextFocus && vimMode == 'command'"
       },
       {
-        "command": "treemotions.findPreviousBody",
+        "command": "treemotions.findPreviousBlock",
         "key": "shift+b",
         "when": "editorTextFocus && vimMode == 'command'"
       },
