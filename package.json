@@ -37,7 +37,7 @@
     "keybindings": [
       {
         "command": "treemotions.toggleMode",
-        "key": "ctrl+alt+v",
+        "key": "alt+i",
         "when": "editorTextFocus"
       },
       {
@@ -59,6 +59,41 @@
         "command": "treemotions.navigateRight",
         "key": "l",
         "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.goToDefinition",
+        "key": "g d",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.findNextIdentifier",
+        "key": "i",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.findPreviousIdentifier",
+        "key": "shift+i",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.moveToNextSibling",
+        "key": "alt+j",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "treemotions.moveToPreviousSibling",
+        "key": "alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "treemotions.moveToParent",
+        "key": "alt+h",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "treemotions.moveToChild",
+        "key": "alt+l",
+        "when": "editorTextFocus"
       }
     ]
   },
@@ -83,6 +118,7 @@
   },
   "dependencies": {
     "tree-sitter": "^0.21.1",
+    "tree-sitter-javascript": "^0.21.4",
     "tree-sitter-python": "^0.21.0"
   }
 }
