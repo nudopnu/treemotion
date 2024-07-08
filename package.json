@@ -76,6 +76,16 @@
         "when": "editorTextFocus && vimMode == 'command'"
       },
       {
+        "command": "treemotions.findNextBody",
+        "key": "b",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.findPreviousBody",
+        "key": "shift+b",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
         "command": "treemotions.moveToNextSibling",
         "key": "alt+j",
         "when": "editorTextFocus"
