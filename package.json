@@ -86,6 +86,16 @@
         "when": "editorTextFocus && vimMode == 'command'"
       },
       {
+        "command": "treemotions.findNextParameters",
+        "key": "p",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "command": "treemotions.findPreviousParameters",
+        "key": "shift+p",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
         "command": "treemotions.moveToNextSibling",
         "key": "alt+j",
         "when": "editorTextFocus"

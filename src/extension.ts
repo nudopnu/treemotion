@@ -7,6 +7,7 @@ let parser: any;
 const PATTERN = {
 	Identifier: '(identifier) @identifier',
 	Block: '(block) @block',
+	Parameters: '(parameters) @parameters',
 };
 
 const COMMON_TREE_MOTIONS: { [key: string]: (startNode: any, offset: number) => any } = {
@@ -14,6 +15,8 @@ const COMMON_TREE_MOTIONS: { [key: string]: (startNode: any, offset: number) => 
 	findPreviousIdentifier: (startNode, offset) => seek('previous', PATTERN.Identifier, startNode, offset),
 	findNextBlock: (startNode, offset) => seek('next', PATTERN.Block, startNode, offset),
 	findPreviousBlock: (startNode, offset) => seek('previous', PATTERN.Block, startNode, offset),
+	findNextParameters: (startNode, offset) => seek('next', PATTERN.Parameters, startNode, offset),
+	findPreviousParameters: (startNode, offset) => seek('previous', PATTERN.Parameters, startNode, offset),
 };
 
 async function initializeParser(context: vscode.ExtensionContext, language: string) {
