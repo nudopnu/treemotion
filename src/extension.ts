@@ -27,6 +27,7 @@ const COMMON_TREE_MOTIONS: { [key: string]: (params: MotionParams) => SyntaxNode
 	findPreviousParameters: ({ startNode, offset }) => seek('previous', PATTERN.Parameters, startNode, offset),
 	moveToParent: ({ startNode }) => seekNextParent(startNode),
 	moveToNextSibling: ({ startNode, document, position, offset }) => seekNextSibling(startNode, document, offset, position),
+	moveToPreviousSibling: ({ startNode, document, position, offset }) => seekPreviousSibling(startNode, document, offset, position),
 };
 
 async function initializeParser(context: vscode.ExtensionContext, language: string) {
@@ -241,6 +242,60 @@ function seekNextSibling(node: SyntaxNode, document: vscode.TextDocument, offset
 	}
 
 	return targetNode.nextSibling ?? node;
+}
+
+function seekPreviousSibling(node: SyntaxNode, document: vscode.TextDocument, offset: number, position: vscode.Position): SyntaxNode {
+	/* Mark first non-whitespace line */
+	let lineNumber = position.line;
+	let line = document.lineAt(lineNumber);
+	while (line.isEmptyOrWhitespace) {
+		lineNumber -= 1;
+		if (lineNumber <= 0) {
+			return node;
+		}
+		line = document.lineAt(lineNumber);
+	}
+
+	/* Get node at first non-whitespace character */
+	const firstNonWhitespaceCharacterIndex = line.firstNonWhitespaceCharacterIndex;
+	const startNode = node.tree.rootNode.namedDescendantForPosition({
+		row: lineNumber,
+		column: firstNonWhitespaceCharacterIndex
+	});
+
+	/* Jump to first node if it wasn't already before or on that position */
+	if (offset > startNode.startIndex) {
+		return startNode;
+	}
+
+	/* Get largest single-line node (if it is smaller than whole line)*/
+	let targetNode = startNode;
+	let previousNode = targetNode;
+	while (targetNode.startPosition.row === targetNode.endPosition.row) {
+		if (!targetNode.parent) { break; };
+		previousNode = targetNode;
+		targetNode = targetNode.parent;
+	}
+	targetNode = previousNode;
+
+	vscode.window.showInformationMessage(targetNode.text);
+	if (targetNode.previousSibling) {
+		vscode.window.showInformationMessage(targetNode.previousSibling.text);
+	}
+
+	if (targetNode.previousSibling) {
+		return targetNode.previousSibling;
+	}
+
+	/* If it has no previous sibling, go to parent that starts at some line above */
+	while (targetNode.parent) {
+		targetNode = targetNode.parent;
+		if (targetNode.startPosition.row < startNode.startPosition.row) {
+			return targetNode;
+		}
+	}
+
+	return targetNode;
 }
 
 
