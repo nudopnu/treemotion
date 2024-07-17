@@ -105,7 +105,7 @@ function moveSubWordLeft() {
 	let isInOriginalLine = true;
 	let candidatePosition: number | undefined = undefined;
 
-	while (lineNumber > 0) {
+	while (lineNumber >= 0) {
 		const line = document.lineAt(lineNumber).text;
 
 		while (true) {
