@@ -136,7 +136,7 @@
         "when": "editorTextFocus"
       },
       {
-        "key": "b",
+        "key": "shift+w",
         "command": "treemotions.moveSubWordLeft",
         "when": "editorTextFocus && vimMode == 'command'"
       },
