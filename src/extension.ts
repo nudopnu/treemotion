@@ -60,10 +60,10 @@ function registerMotions(context: vscode.ExtensionContext, motions: { [key: stri
 }
 
 export async function activate(context: vscode.ExtensionContext) {
+	await initializeParserForActiveEditor(context);
 	context.subscriptions.push(
 		vscode.workspace.onDidOpenTextDocument((document) => handleFileOpen(context, document))
 	);
-	await initializeParserForActiveEditor(context);
 	context.subscriptions.push(
 		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode)
 	);
@@ -82,8 +82,85 @@ export async function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(
 		vscode.commands.registerCommand('treemotions.goToDefinition', goToDefinition)
 	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand('treemotions.moveSubWordLeft', moveSubWordLeft)
+	);
+	context.subscriptions.push(
+		vscode.commands.registerCommand('treemotions.moveSubWordRight', moveSubWordRight)
+	);
 
 	vscode.window.onDidChangeTextEditorSelection(updateCursor, null, context.subscriptions);
+}
+
+function moveSubWordLeft() {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) { return; }
+
+	const document = editor.document;
+	const selection = editor.selection;
+
+	const position = selection.active;
+	let lineNumber = position.line;
+	const subWordRegex = /([a-z]+|[A-Z][a-z]*|[0-9]+)/g;
+	let isInOriginalLine = true;
+	let candidatePosition: number | undefined = undefined;
+
+	while (lineNumber > 0) {
+		const line = document.lineAt(lineNumber).text;
+
+		while (true) {
+			const match = subWordRegex.exec(line);
+			if (!match) { break; }
+
+			if (isInOriginalLine && (match.index >= position.character)) {
+				break;
+			}
+			candidatePosition = match.index;
+		}
+		if (candidatePosition !== undefined) {
+			const newPosition = new vscode.Position(lineNumber, candidatePosition);
+			editor.selection = new vscode.Selection(newPosition, newPosition);
+			return;
+		}
+		isInOriginalLine = false;
+		lineNumber--;
+	}
+}
+
+function moveSubWordRight() {
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) { return; }
+
+	const document = editor.document;
+	const selection = editor.selection;
+
+	const position = selection.active;
+	let lineNumber = position.line;
+	const subWordRegex = /([a-z]+|[A-Z][a-z]*|[0-9]+)/g;
+	let isInOriginalLine = true;
+	let candidatePosition: number | undefined = undefined;
+
+	while (lineNumber < document.lineCount) {
+		const line = document.lineAt(lineNumber).text;
+
+		while (true) {
+			const match = subWordRegex.exec(line);
+			if (!match) { break; }
+
+			if (isInOriginalLine && (match.index <= position.character)) {
+				continue;
+			}
+			candidatePosition = match.index;
+			break;
+		}
+		if (candidatePosition !== undefined) {
+			const newPosition = new vscode.Position(lineNumber, candidatePosition);
+			editor.selection = new vscode.Selection(newPosition, newPosition);
+			return;
+		}
+		isInOriginalLine = false;
+		lineNumber++;
+	}
 }
 
 async function handleFileOpen(context: vscode.ExtensionContext, document: vscode.TextDocument) {
@@ -117,7 +194,7 @@ async function parseActiveEditorContent() {
 	const tree = parser.parse(text);
 
 	// Now you can work with the parsed tree
-	console.log(tree.rootNode.toString());
+	// console.log(tree.rootNode.toString());
 }
 
 function navigate(direction: 'left' | 'down' | 'up' | 'right') {

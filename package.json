@@ -114,6 +114,36 @@
         "command": "treemotions.moveToChild",
         "key": "alt+l",
         "when": "editorTextFocus"
+      },
+      {
+        "command": "cursorTop",
+        "key": "ctrl+alt+j",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "cursorBottom",
+        "key": "ctrl+alt+k",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "undo",
+        "key": "u",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "redo",
+        "key": "r",
+        "when": "editorTextFocus"
+      },
+      {
+        "key": "b",
+        "command": "treemotions.moveSubWordLeft",
+        "when": "editorTextFocus && vimMode == 'command'"
+      },
+      {
+        "key": "w",
+        "command": "treemotions.moveSubWordRight",
+        "when": "editorTextFocus && vimMode == 'command'"
       }
     ]
   },
