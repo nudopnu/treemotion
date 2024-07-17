@@ -111,7 +111,7 @@
         "when": "editorTextFocus"
       },
       {
-        "command": "treemotions.moveToChild",
+        "command": "treemotions.findNextBlock",
         "key": "alt+l",
         "when": "editorTextFocus"
       },

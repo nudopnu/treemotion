@@ -295,7 +295,7 @@ function seekNextSibling(node: SyntaxNode, document: vscode.TextDocument, offset
 		targetNode = targetNode.parent;
 	}
 	targetNode = previousNode;
-	vscode.window.showInformationMessage(targetNode.text);
+	// vscode.window.showInformationMessage(targetNode.text);
 
 	/* If it was a multi-line node, get child that starts below current line */
 	if (!targetNode.nextSibling && targetNode.startPosition.row !== targetNode.endPosition.row) {
@@ -355,10 +355,10 @@ function seekPreviousSibling(node: SyntaxNode, document: vscode.TextDocument, of
 	}
 	targetNode = previousNode;
 
-	vscode.window.showInformationMessage(targetNode.text);
-	if (targetNode.previousSibling) {
-		vscode.window.showInformationMessage(targetNode.previousSibling.text);
-	}
+	// vscode.window.showInformationMessage(targetNode.text);
+	// if (targetNode.previousSibling) {
+	// 	vscode.window.showInformationMessage(targetNode.previousSibling.text);
+	// }
 
 	if (targetNode.previousSibling) {
 		return targetNode.previousSibling;
