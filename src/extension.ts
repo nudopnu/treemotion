@@ -1,29 +1,12 @@
+import Parser, { Query, SyntaxNode } from 'tree-sitter';
 import * as vscode from 'vscode';
-import Parser, { SyntaxNode, Query, Tree } from 'tree-sitter';
+import * as basicMotions from "./motions/basic";
+import * as subwordMotions from "./motions/subword";
+import { MotionParams, State } from './types';
 const detect = require('language-detect');
-
-type MotionParams = {
-	startNode: SyntaxNode,
-	tree: Tree,
-	document: vscode.TextDocument,
-	position: vscode.Position,
-	offset: number;
-};
-
-type Mode = 'insert' | 'command';
-
-type State = {
-	mode: Mode;
-	languageId: string | undefined;
-	parser: Parser | undefined;
-	tree: Parser.Tree | undefined;
-};
 
 let state: State = {
 	mode: 'insert',
-	parser: undefined,
-	languageId: undefined,
-	tree: undefined,
 };
 
 const PATTERN = {
@@ -78,109 +61,29 @@ function registerMotions(context: vscode.ExtensionContext, motions: { [key: stri
 
 export async function activate(context: vscode.ExtensionContext) {
 	await initializeParserForActiveEditor(context);
-	context.subscriptions.push(
-		vscode.workspace.onDidOpenTextDocument((document) => handleFileOpen(context, document))
-	);
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeTextDocument((event) => handleDocumentChange(context, event.document))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode)
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.navigateLeft', () => navigate('left'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.navigateDown', () => navigate('down'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.navigateUp', () => navigate('up'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.navigateRight', () => navigate('right'))
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.goToDefinition', goToDefinition)
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveSubWordLeft', moveSubWordLeft)
-	);
-	context.subscriptions.push(
-		vscode.commands.registerCommand('treemotions.moveSubWordRight', moveSubWordRight)
-	);
-
-	vscode.window.onDidChangeTextEditorSelection(updateCursor, null, context.subscriptions);
+	registerBasicCommands(context);
+	registerCallbacks(context);
 }
 
-function moveSubWordLeft() {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) { return; }
-
-	const document = editor.document;
-	const selection = editor.selection;
-
-	const position = selection.active;
-	let lineNumber = position.line;
-	const subWordRegex = /([a-z]+|[A-Z][a-z]*|[0-9]+)/g;
-	let isInOriginalLine = true;
-	let candidatePosition: number | undefined = undefined;
-
-	while (lineNumber >= 0) {
-		const line = document.lineAt(lineNumber).text;
-
-		while (true) {
-			const match = subWordRegex.exec(line);
-			if (!match) { break; }
-
-			if (isInOriginalLine && (match.index >= position.character)) {
-				break;
-			}
-			candidatePosition = match.index;
-		}
-		if (candidatePosition !== undefined) {
-			const newPosition = new vscode.Position(lineNumber, candidatePosition);
-			editor.selection = new vscode.Selection(newPosition, newPosition);
-			return;
-		}
-		isInOriginalLine = false;
-		lineNumber--;
-	}
+function registerBasicCommands(context: vscode.ExtensionContext) {
+	context.subscriptions.push(...[
+		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode),
+		vscode.commands.registerCommand('treemotions.navigateLeft', () => basicMotions.navigate('left')),
+		vscode.commands.registerCommand('treemotions.navigateDown', () => basicMotions.navigate('down')),
+		vscode.commands.registerCommand('treemotions.navigateUp', () => basicMotions.navigate('up')),
+		vscode.commands.registerCommand('treemotions.navigateRight', () => basicMotions.navigate('right')),
+		vscode.commands.registerCommand('treemotions.goToDefinition', goToDefinition),
+		vscode.commands.registerCommand('treemotions.moveSubWordLeft', subwordMotions.moveSubWordLeft),
+		vscode.commands.registerCommand('treemotions.moveSubWordRight', subwordMotions.moveSubWordRight),
+	]);
 }
 
-function moveSubWordRight() {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor) { return; }
-
-	const document = editor.document;
-	const selection = editor.selection;
-
-	const position = selection.active;
-	let lineNumber = position.line;
-	const subWordRegex = /([a-z]+|[A-Z][a-z]*|[0-9]+)/g;
-	let isInOriginalLine = true;
-	let candidatePosition: number | undefined = undefined;
-
-	while (lineNumber < document.lineCount) {
-		const line = document.lineAt(lineNumber).text;
-
-		while (true) {
-			const match = subWordRegex.exec(line);
-			if (!match) { break; }
-
-			if (isInOriginalLine && (match.index <= position.character)) {
-				continue;
-			}
-			candidatePosition = match.index;
-			break;
-		}
-		if (candidatePosition !== undefined) {
-			const newPosition = new vscode.Position(lineNumber, candidatePosition);
-			editor.selection = new vscode.Selection(newPosition, newPosition);
-			return;
-		}
-		isInOriginalLine = false;
-		lineNumber++;
-	}
+function registerCallbacks(context: vscode.ExtensionContext) {
+	context.subscriptions.push(...[
+		vscode.workspace.onDidOpenTextDocument((document) => handleFileOpen(context, document)),
+		vscode.workspace.onDidChangeTextDocument((event) => handleDocumentChange(context, event.document)),
+		vscode.window.onDidChangeTextEditorSelection(updateCursor),
+	]);
 }
 
 async function handleFileOpen(context: vscode.ExtensionContext, document: vscode.TextDocument) {
@@ -218,23 +121,6 @@ async function parseActiveEditorContent() {
 	const document = editor.document;
 	const text = document.getText();
 	state.tree = state.parser.parse(text);
-}
-
-function navigate(direction: 'left' | 'down' | 'up' | 'right') {
-	const editor = vscode.window.activeTextEditor;
-	if (!editor || state.mode !== 'command') { return; }
-
-	const positions = editor.selections.map(selection => {
-		const position = selection.active;
-		switch (direction) {
-			case 'left': return position.translate(0, -1);
-			case 'down': return position.translate(1, 0);
-			case 'up': return position.translate(-1, 0);
-			case 'right': return position.translate(0, 1);
-		}
-	});
-
-	editor.selections = positions.map(position => new vscode.Selection(position, position));
 }
 
 function submitTreeMotion(targetFunc: (params: MotionParams) => SyntaxNode) {
@@ -400,7 +286,6 @@ function seekPreviousSibling(node: SyntaxNode, document: vscode.TextDocument, of
 	return targetNode;
 }
 
-
 async function goToDefinition() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) { return; }
@@ -414,6 +299,5 @@ function updateCursor() {
 	const cursorStyle = state.mode === 'command' ? vscode.TextEditorCursorStyle.Block : vscode.TextEditorCursorStyle.Line;
 	editor.options.cursorStyle = cursorStyle;
 }
-
 
 export function deactivate() { }
