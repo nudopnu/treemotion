@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import Parser, { SyntaxNode, Query, Tree } from 'tree-sitter';
+const detect = require('language-detect');
 
 type MotionParams = {
 	startNode: SyntaxNode,
@@ -9,8 +10,21 @@ type MotionParams = {
 	offset: number;
 };
 
-let vimMode: 'insert' | 'command' = 'insert';
-let parser: Parser;
+type Mode = 'insert' | 'command';
+
+type State = {
+	mode: Mode;
+	languageId: string | undefined;
+	parser: Parser | undefined;
+	tree: Parser.Tree | undefined;
+};
+
+let state: State = {
+	mode: 'insert',
+	parser: undefined,
+	languageId: undefined,
+	tree: undefined,
+};
 
 const PATTERN = {
 	Identifier: '(identifier) @identifier',
@@ -31,20 +45,23 @@ const COMMON_TREE_MOTIONS: { [key: string]: (params: MotionParams) => SyntaxNode
 };
 
 async function initializeParser(context: vscode.ExtensionContext, language: string) {
-	parser = new Parser();
+	const languageDidNotChange = language === state.languageId;
+	if (languageDidNotChange) { return; }
 	switch (language) {
 		case 'python':
 			const Python = require('tree-sitter-python');
-			parser.setLanguage(Python);
+			state.parser = new Parser();
+			state.parser.setLanguage(Python);
 			registerMotions(context, COMMON_TREE_MOTIONS);
 			break;
 		case 'javascript':
 			const JavaScript = require('tree-sitter-javascript');
-			parser.setLanguage(JavaScript);
+			state.parser = new Parser();
+			state.parser.setLanguage(JavaScript);
 			registerMotions(context, COMMON_TREE_MOTIONS);
 			break;
 		default:
-			// parser = null;
+			state.parser = undefined;
 			vscode.window.showErrorMessage(`Unsupported language: ${language}`);
 			break;
 	}
@@ -63,6 +80,9 @@ export async function activate(context: vscode.ExtensionContext) {
 	await initializeParserForActiveEditor(context);
 	context.subscriptions.push(
 		vscode.workspace.onDidOpenTextDocument((document) => handleFileOpen(context, document))
+	);
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeTextDocument((event) => handleDocumentChange(context, event.document))
 	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand('treemotions.toggleMode', toggleMode)
@@ -164,42 +184,45 @@ function moveSubWordRight() {
 }
 
 async function handleFileOpen(context: vscode.ExtensionContext, document: vscode.TextDocument) {
-	const language = document.languageId;
+	const language = detect.filename(document.fileName).toLowerCase();
 	await initializeParser(context, language);
 	parseActiveEditorContent();
 }
 
+async function handleDocumentChange(context: vscode.ExtensionContext, document: vscode.TextDocument) {
+	const language = detect.filename(document.fileName).toLowerCase();
+	await initializeParser(context, language);
+	if (!state.parser) { return; }
+	const text = document.getText();
+	state.tree = state.parser.parse(text, state.tree);
+}
+
 function toggleMode() {
-	vimMode = vimMode === 'insert' ? 'command' : 'insert';
-	vscode.commands.executeCommand('setContext', 'vimMode', vimMode);
+	state.mode = state.mode === 'insert' ? 'command' : 'insert';
+	vscode.commands.executeCommand('setContext', 'vimMode', state.mode);
 	updateCursor();
-	parseActiveEditorContent();
 }
 
 async function initializeParserForActiveEditor(context: vscode.ExtensionContext) {
 	const editor = vscode.window.activeTextEditor;
-	if (editor) {
-		const document = editor.document;
-		const language = document.languageId;
-		await initializeParser(context, language);
-	}
+	if (!editor) { return; }
+	const document = editor.document;
+	const language = document.languageId;
+	await initializeParser(context, language);
 }
 
 async function parseActiveEditorContent() {
 	const editor = vscode.window.activeTextEditor;
-	if (!editor) { return; }
+	if (!editor || !state.parser) { return; }
 
 	const document = editor.document;
 	const text = document.getText();
-	const tree = parser.parse(text);
-
-	// Now you can work with the parsed tree
-	// console.log(tree.rootNode.toString());
+	state.tree = state.parser.parse(text);
 }
 
 function navigate(direction: 'left' | 'down' | 'up' | 'right') {
 	const editor = vscode.window.activeTextEditor;
-	if (!editor || vimMode !== 'command') { return; }
+	if (!editor || state.mode !== 'command') { return; }
 
 	const positions = editor.selections.map(selection => {
 		const position = selection.active;
@@ -216,16 +239,18 @@ function navigate(direction: 'left' | 'down' | 'up' | 'right') {
 
 function submitTreeMotion(targetFunc: (params: MotionParams) => SyntaxNode) {
 	const editor = vscode.window.activeTextEditor;
-	if (!editor || !parser) { return; }
+	if (!editor || !state.parser) { return; }
 
 	const document = editor.document;
-	const text = document.getText();
-	const tree = parser.parse(text);
+	if (!state.tree) {
+		const text = document.getText();
+		state.tree = state.parser.parse(text);
+	}
 	const position = editor.selection.active;
 	const offset = document.offsetAt(position);
 
-	const startNode = tree.rootNode.namedDescendantForPosition({ row: position.line, column: position.character });
-	let targetNode = targetFunc({ startNode, position, offset, document, tree });
+	const startNode = state.tree.rootNode.namedDescendantForPosition({ row: position.line, column: position.character });
+	let targetNode = targetFunc({ startNode, position, offset, document, tree: state.tree });
 
 	if (targetNode) {
 		const newPosition = new vscode.Position(targetNode.startPosition.row, targetNode.startPosition.column);
@@ -245,7 +270,7 @@ function seekNextParent(node: SyntaxNode) {
 }
 
 function seek(direction: 'next' | 'previous', pattern: string, startNode: SyntaxNode, offset: number) {
-	const query = new Query(parser.getLanguage(), pattern);
+	const query = new Query(state.parser!.getLanguage(), pattern);
 	const captures = [...query.captures(startNode.tree.rootNode)];
 
 	let previousNode = startNode;
@@ -386,7 +411,7 @@ function updateCursor() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) { return; }
 
-	const cursorStyle = vimMode === 'command' ? vscode.TextEditorCursorStyle.Block : vscode.TextEditorCursorStyle.Line;
+	const cursorStyle = state.mode === 'command' ? vscode.TextEditorCursorStyle.Block : vscode.TextEditorCursorStyle.Line;
 	editor.options.cursorStyle = cursorStyle;
 }
 
